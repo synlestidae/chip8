@@ -2,15 +2,17 @@ use rand::distributions::{IndependentSample, Range};
 use rand;
 
 pub struct CPU {
-	pub registers: [u8; 8],
-	pub pc: u16,
-	pub index: u16,
 	pub delay_timer: u8,
 	pub sound_timer: u8,
-	pub sp: u8,
-	stack: Vec<u16>, 
-	ram: RAM,
 	pub gfx: GFX,
+	registers: [u8; 8],
+	pc: u16,
+	index: u16,
+	sp: u8,
+	keypad: [u8; 16],
+	draw_flag: bool,
+	stack: Vec<u16>, 
+	ram: RAM
 }
 
 type Keypad = [u8; 16];
@@ -18,9 +20,7 @@ type RAM = [u8; 4096];
 pub type GFX = [u8; 64 * 32];
 
 pub struct Chip8 {
-	cpu: CPU,
-	keypad: Keypad,
-	draw_flag: bool
+	cpu: CPU
 }
 
 impl Default for CPU {
@@ -33,8 +33,10 @@ impl Default for CPU {
 }
 
 impl CPU {
-	pub fn _initialise_memory(&mut self) {
-		//TODO make this actually do something
+	pub fn write_memory(&mut self, bytes: &[u8], address: u16) {
+		for i in 0..bytes.len() as usize {
+			self.ram[address as usize + i] = bytes[i]
+		}
 	}
 
 	pub fn emulate_cycle(&mut self) {
@@ -128,7 +130,7 @@ impl CPU {
 				let val = self.registers[register_x];
 				let result = val - self.registers[register_y];
 				self.registers[register_x] = result;
-				if (result < val) {
+				if result < val {
 					self.registers[0xF] = 0;
 				}
 				else {
@@ -165,8 +167,8 @@ impl CPU {
 			else if instruction & 0xF00F == 0x9000 {
 				/*0x9XY0	Skips the next instruction if VX doesn't equal VY.*/
 				register_x = (instruction & 0x0F00) >> 8;
-				register_y = (instruction & 0x0F00) >> 4;
-				if self.registers[register_x] != self.registers[register_x] {
+				register_y = (instruction & 0x0F0) >> 4;
+				if self.registers[register_x] != self.registers[register_y] {
 					self.pc += 2;
 				}
 			}
@@ -203,20 +205,30 @@ impl CPU {
 					let mut x : i8 = 7;
 					while x > 0 {
 						let mut pixel = &mut self.gfx[(py as usize) * 32 + (px as usize)];
+						let ghost_pixel = *pixel;
 						*pixel = match (*pixel != 0) ^ ((row & (1 << x)) >> x == 1) {
 							true => 1,
 							false => 0
 						};
-						//self.gfx[py * 32 + px] = pixel;
+						//If this causes any pixels to be erased, VF is set to 1 
+						//otherwise it is set to 0
+						if (*pixel == 0 && ghost_pixel == 1) {
+							self.registers[0xF] = 1;
+						}
+						else {
+							self.registers[0xF] = 0;
+						}
 						x = x - 1;
 					}
 				}
 			} 
 			else if instruction & 0xF0FF == 0xE09E {
 				//EX9E	Skips the next instruction if the key stored in VX is pressed.
+				panic!("Key presses are not implemented");
 			} 
 			else if instruction & 0xF0FF == 0xE0A1 {
 				//EXA1	Skips the next instruction if the key stored in VX isn't pressed.
+				panic!("Key presses are not implemented");
 			} 
 			else if instruction & 0xF0FF == 0xF007 {
 				//FX07 Sets VX to the value of the delay timer.
@@ -245,9 +257,15 @@ impl CPU {
 				// FX29	Sets I to the location of the sprite for the character in VX. 
 				//haracters 0-F (in hexadecimal) are represented by a 4x5 font.
 			} 
-			else if instruction & 0xF0FF == 0xF033 {} // FX33	Stores the Binary-coded decimal representation of VX, with the most significant of three digits at the address in I, the middle digit at I plus 1, and the least significant digit at I plus 2. (In other words, take the decimal representation of VX, place the hundreds digit in memory at location in I, the tens digit at location I+1, and the ones digit at location I+2.)
-			else if instruction & 0xF0FF == 0xF055 {} // FX55	Stores V0 to VX (including VX) in memory starting at address I.[4]
-			else if instruction & 0xF0FF == 0xF065 {} // FX65	Fills V0 to VX (including VX) with values from memory starting at address I.[4]
+			else if instruction & 0xF0FF == 0xF033 {
+				panic!("Load/store instructions not implemented");
+			} // FX33	Stores the Binary-coded decimal representation of VX, with the most significant of three digits at the address in I, the middle digit at I plus 1, and the least significant digit at I plus 2. (In other words, take the decimal representation of VX, place the hundreds digit in memory at location in I, the tens digit at location I+1, and the ones digit at location I+2.)
+			else if instruction & 0xF0FF == 0xF055 {
+				panic!("Load/store instructions not implemented");
+			} // FX55	Stores V0 to VX (including VX) in memory starting at address I.[4]
+			else if instruction & 0xF0FF == 0xF065 {
+				panic!("Load/store instructions not implemented");
+			} // FX65	Fills V0 to VX (including VX) with values from memory starting at address I.[4]
 			else {
 				panic!("Unknown instruction: {}", instruction);
 			}
@@ -265,12 +283,21 @@ impl Chip8 {
 	pub fn new() -> Chip8 {
 		Chip8 {
 			cpu: CPU {
-				gfx: [0; 2048],
+				//gfx: [0; 2048],
+				//draw_flag: false,
+				//keypad: [0; 16],
 				..Default::default()
-			},
-			keypad: [0; 16],
-			draw_flag: false
-
+			}
 		}
+	}
+
+	pub fn boot(&mut self, cartridge: &[u8]) {
+		self._initialise_memory();
+		self.cpu.write_memory(cartridge, 0x512);
+		self.cpu.pc = 512;
+	}
+
+	fn _initialise_memory(&mut self) {
+		//TODO make this actually do something
 	}
 }

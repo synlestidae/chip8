@@ -9,6 +9,7 @@ pub struct CPU {
 	pub sound_timer: u8,
 	pub sp: u8,
 	stack: Vec<u16>, 
+	ram: RAM,
 	pub gfx: GFX,
 }
 
@@ -18,7 +19,6 @@ pub type GFX = [u8; 64 * 32];
 
 pub struct Chip8 {
 	cpu: CPU,
-	ram: RAM,
 	keypad: Keypad,
 	draw_flag: bool
 }
@@ -33,6 +33,10 @@ impl Default for CPU {
 }
 
 impl CPU {
+	pub fn _initialise_memory(&mut self) {
+		//TODO make this actually do something
+	}
+
 	pub fn emulate_cycle(&mut self) {
 			let register_x: usize;
 			let register_y: usize;
@@ -189,6 +193,24 @@ impl CPU {
 				//drawn starting at position VX, VY. N is the number of 8bit rows 
 				//that need to be drawn. If N is greater than 1, second line 
 				//continues at position VX, VY+1, and so on.
+				let sprite_height = (instruction & 0x000F) as u16;
+				register_x = instruction & 0x0F00 >> 8;
+				register_y = instruction & 0x00F0 >> 8;
+				let px = self.registers[register_x];
+				let py = self.registers[register_y];
+				for i in 0..sprite_height {
+					let mut row = self.ram[(self.index + i) as usize];
+					let mut x : i8 = 7;
+					while x > 0 {
+						let mut pixel = &mut self.gfx[(py as usize) * 32 + (px as usize)];
+						*pixel = match (*pixel != 0) ^ ((row & (1 << x)) >> x == 1) {
+							true => 1,
+							false => 0
+						};
+						//self.gfx[py * 32 + px] = pixel;
+						x = x - 1;
+					}
+				}
 			} 
 			else if instruction & 0xF0FF == 0xE09E {
 				//EX9E	Skips the next instruction if the key stored in VX is pressed.
@@ -246,7 +268,6 @@ impl Chip8 {
 				gfx: [0; 2048],
 				..Default::default()
 			},
-			ram: [0; 4096],
 			keypad: [0; 16],
 			draw_flag: false
 

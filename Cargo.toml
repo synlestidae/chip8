@@ -1,0 +1,7 @@
+[package]
+name = "chip8"
+version = "0.1.0"
+authors = ["Mate Antunovic <mate.a@blackpearlmail.com>"]
+
+[dependencies]
+rand = "0.3"

@@ -5,7 +5,7 @@ pub struct CPU {
 	pub delay_timer: u8,
 	pub sound_timer: u8,
 	pub gfx: GFX,
-	registers: [u8; 8],
+	registers: [u8; 16],
 	pc: u16,
 	index: u16,
 	sp: u8,
@@ -23,19 +23,27 @@ pub struct Chip8 {
 	cpu: CPU
 }
 
-impl Default for CPU {
-	fn default() -> CPU {
+impl CPU {
+	pub fn new() -> CPU {
 		CPU {
+			delay_timer: 0,
+			sound_timer: 0,
 			gfx: [0; 2048],
-			..Default::default()
+			registers: [0; 16],
+			pc: 0,
+			index: 0,
+			sp: 0,
+			keypad: [0; 16],
+			draw_flag: false,
+			stack: Vec::new(), 
+			ram: [0; 4096]
 		}
 	}
-}
 
-impl CPU {
 	pub fn write_memory(&mut self, bytes: &[u8], address: u16) {
 		for i in 0..bytes.len() as usize {
-			self.ram[address as usize + i] = bytes[i]
+			self.ram[address as usize + i] = bytes[i];
+			//println!("B: {} {}", (address as usize + i), bytes[i]);
 		}
 	}
 
@@ -46,31 +54,40 @@ impl CPU {
 			let instruction = self._fetch() as usize;
 			if 0xF000 & instruction == 0x1000 {
 				self.pc = instruction as u16 & 0x0FFF;
+				return;
 			}
 			else if instruction == 0x00E0 { //Clears the screen.
 				self.gfx = [0; 2048];
 			}
 			else if instruction == 0x00EE { //Returns from a subroutine.
 				self.pc = self.stack.pop().unwrap();
+				return;
 			}
 			else if instruction & 0xF000 == 0x1000 {
 				let address = instruction & 0x0FFF;
 				self.pc = address as u16;
+				return;
 			}
 			else if instruction & 0xF000 == 0x2000 { //Calls subroutine at NNN.
 				let sub = instruction - 0x2000;
 				self.stack.push(self.pc);
 				self.pc = sub as u16;
+				return;
 			} 
-			else if instruction & 0xF000 == 0x3000 {// 3XNN	//Skips the next instruction if VX equals NN.
+			else if instruction & 0xF000 == 0x3000 {
+				// 3XNN	//Skips the next instruction if VX equals NN.
 				let register = (instruction & 0x0F00) >> 8;
-				if self.registers[register] == 0x00FF & instruction as u8 {
+				let n = (0x00FF & instruction) as u8;
+				println!("Reg: {} {} {}", register, self.registers[register], n);
+				if self.registers[register] == n {
 					self.pc += 2;
 				}
 			}
 			else if instruction & 0xF000 == 0x4000 {
 				//  4XNN	Skips the next instruction if VX doesn't equal NN.
 				let register = (instruction & 0x0F00) >> 8;
+				let n = (0x00FF & instruction) as u8;
+				println!("Reg: {} {} {}", register, self.registers[register], n);
 				if self.registers[register] != 0x00FF & instruction as u8 {
 					self.pc += 2;
 				}
@@ -78,7 +95,7 @@ impl CPU {
 			else if instruction & 0xF00F == 0x5000 { 
 				// 5XY0 //Skips the next instruction if VX equals VY.
 				register_x = (0x0F00 & instruction) >> 8;
-				register_y = (0x0F0 & instruction) >> 4;
+				register_y = (0x00F0 & instruction) >> 4;
 				if self.registers[register_x] == self.registers[register_y] {
 					self.pc += 2;
 				}
@@ -91,12 +108,13 @@ impl CPU {
 			else if instruction & 0xF000 == 0x7000 {
 				//7XNN	Adds NN to VX.
 				register_x = (instruction & 0x0F00) >> 8;
-				self.registers[register_x] = self.registers[register_x] + (instruction & 0x00FF) as u8; 
+				let n = (instruction & 0x00FF) as u8;
+				self.registers[register_x] = self.registers[register_x].overflowing_add(n).0; 
 			}
 			else if instruction & 0xF00F == 0x8000 { 
 				//8XY0	Sets VX to the value of VY. 
 				register_x = (instruction & 0x0F00) >> 8;
-				register_y = (instruction & 0x0F00) >> 4;
+				register_y = (instruction & 0x00F0) >> 4;
 				self.registers[register_x] = self.registers[register_y];
 			}
 			else if instruction & 0xF00F == 0x8001 { 
@@ -121,7 +139,12 @@ impl CPU {
 				//8XY4	Adds VY to VX. VF is set to 1 when there's a carry, and to 0 when there isn't.
 				register_x = (instruction & 0x0F00) >> 8;
 				register_y = (instruction & 0x0F00) >> 4;
-				self.registers[register_x] = self.registers[register_x] & self.registers[register_y];
+				let result = self.registers[register_x].overflowing_add(self.registers[register_y]);
+				self.registers[register_x] =  result.0;
+				self.ram[0xF] = match result.1 {
+					 true => 1,
+					 false => 0
+				};
 			}
 			else if instruction & 0xF00F == 0x8005 {
 				/*8XY5 VY is subtracted from VX. VF is set to 0 when there's a borrow, and 1 when there isn't.*/
@@ -178,8 +201,9 @@ impl CPU {
 			else if instruction & 0xF000 == 0xB000 {
 				//BNNN	Jumps to the address NNN plus V0.
 				self.pc = 0x0FFF & (instruction as u16) + (self.registers[0] as u16);
+				return;
 			} 
-			else if instruction & 0xF000 == 0xF000 {
+			else if instruction & 0xF000 == 0xC000 {
 				//CXNN	Sets VX to the result of a bitwise and operation on a random number and NN.
 				let between = Range::new(0, 0xFF);
 				let mut rng = rand::thread_rng();
@@ -200,6 +224,7 @@ impl CPU {
 				register_y = instruction & 0x00F0 >> 8;
 				let px = self.registers[register_x];
 				let py = self.registers[register_y];
+				println!("Screen position {:?}", (px, py));
 				for i in 0..sprite_height {
 					let mut row = self.ram[(self.index + i) as usize];
 					let mut x : i8 = 7;
@@ -237,6 +262,7 @@ impl CPU {
 			}	
 			else if instruction & 0xF0FF == 0xF00A {
 				// FX0A	A key press is awaited, and then stored in VX.
+				panic!("Key presses are not implemented");
 			} 
 			else if instruction & 0xF0FF == 0xF015 {
 				//  FX15	Sets the delay timer to VX.
@@ -256,25 +282,39 @@ impl CPU {
 			else if instruction & 0xF0FF == 0xF029 {
 				// FX29	Sets I to the location of the sprite for the character in VX. 
 				//haracters 0-F (in hexadecimal) are represented by a 4x5 font.
+				panic!("Sprite instruction FX29 not implemented");
 			} 
 			else if instruction & 0xF0FF == 0xF033 {
+				// FX33	Stores the Binary-coded decimal representation of VX, 
+				//with the most significant of three digits at the address in 
+				//I, the middle digit at I plus 1, and the least significant digit at I plus 2. (In other words, take the decimal representation of VX, place the hundreds digit in memory at location in I, the tens digit at location I+1, and the ones digit at location I+2.)
 				panic!("Load/store instructions not implemented");
-			} // FX33	Stores the Binary-coded decimal representation of VX, with the most significant of three digits at the address in I, the middle digit at I plus 1, and the least significant digit at I plus 2. (In other words, take the decimal representation of VX, place the hundreds digit in memory at location in I, the tens digit at location I+1, and the ones digit at location I+2.)
+			} 
 			else if instruction & 0xF0FF == 0xF055 {
-				panic!("Load/store instructions not implemented");
-			} // FX55	Stores V0 to VX (including VX) in memory starting at address I.[4]
+				// FX55	Stores V0 to VX (including VX) in memory starting at address I.[4]
+				register_x = (instruction & 0x0F00) >> 8;
+				for j in 0..register_x {
+					self.ram[self.index as usize + j] = self.registers[j];
+				}
+			}
 			else if instruction & 0xF0FF == 0xF065 {
-				panic!("Load/store instructions not implemented");
-			} // FX65	Fills V0 to VX (including VX) with values from memory starting at address I.[4]
+				// FX65	Fills V0 to VX (including VX) with values from memory starting at address I.[4]
+				let k = instruction & (0x0F00 >> 8) as usize;
+				for j in 0..k {
+					self.registers[j] = self.ram[self.index as usize + j as usize]
+				}
+			} 
 			else {
 				panic!("Unknown instruction: {}", instruction);
 			}
-		}
+			self.pc += 2;
+		}		
 
 	fn _fetch(&mut self) -> u16 {
-		let i1 = self.pc;
-		let i2 = self.pc + 1;
-		let opcode = (i1 as u16) << 8 | (i2 as u16);
+		let i1 = self.ram[self.pc as usize] as u16;
+		let i2 = self.ram[self.pc as usize + 1] as u16;
+		let opcode = (i1 << 8) | i2;
+		println!("OP: {}", format!("{:X} {:X}", self.pc, opcode));
 		return opcode;
 	}
 }
@@ -282,19 +322,20 @@ impl CPU {
 impl Chip8 {
 	pub fn new() -> Chip8 {
 		Chip8 {
-			cpu: CPU {
-				//gfx: [0; 2048],
-				//draw_flag: false,
-				//keypad: [0; 16],
-				..Default::default()
-			}
+			cpu: CPU::new()
 		}
 	}
 
-	pub fn boot(&mut self, cartridge: &[u8]) {
+	pub fn load(&mut self, cartridge: &[u8]) {
 		self._initialise_memory();
-		self.cpu.write_memory(cartridge, 0x512);
+		self.cpu.write_memory(cartridge, 512);
 		self.cpu.pc = 512;
+	}
+
+	pub fn run(&mut self) {
+		loop {
+			self.cpu.emulate_cycle();
+		}
 	}
 
 	fn _initialise_memory(&mut self) {

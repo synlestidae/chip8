@@ -1,5 +1,6 @@
 use rand::distributions::{IndependentSample, Range};
 use rand;
+use std::sync::mpsc::Receiver;
 
 pub struct CPU {
 	pub delay_timer: u8,
@@ -12,7 +13,8 @@ pub struct CPU {
 	keypad: [u8; 16],
 	draw_flag: bool,
 	stack: Vec<u16>, 
-	ram: RAM
+	ram: RAM,
+	key_input: Receiver<Key>
 }
 
 type Keypad = [u8; 16];
@@ -24,7 +26,7 @@ pub struct Chip8 {
 }
 
 impl CPU {
-	pub fn new() -> CPU {
+	pub fn new(key_input: Receiver<Key>) -> CPU {
 		CPU {
 			delay_timer: 0,
 			sound_timer: 0,
@@ -36,7 +38,8 @@ impl CPU {
 			keypad: [0; 16],
 			draw_flag: false,
 			stack: Vec::new(), 
-			ram: [0; 4096]
+			ram: [0; 4096],
+			key_input: key_input
 		}
 	}
 
@@ -310,19 +313,23 @@ impl CPU {
 			self.pc += 2;
 		}		
 
+	pub fn deal_with_input(&mut self) {
+		//TODO: Make this do stuff
+	}
+
 	fn _fetch(&mut self) -> u16 {
 		let i1 = self.ram[self.pc as usize] as u16;
 		let i2 = self.ram[self.pc as usize + 1] as u16;
 		let opcode = (i1 << 8) | i2;
-		println!("OP: {}", format!("{:X} {:X}", self.pc, opcode));
+		//println!("OP: {}", format!("{:X} {:X}", self.pc, opcode));
 		return opcode;
 	}
 }
 
 impl Chip8 {
-	pub fn new() -> Chip8 {
+	pub fn new(key_input: Receiver<Key>) -> Chip8 {
 		Chip8 {
-			cpu: CPU::new()
+			cpu: CPU::new(key_input)
 		}
 	}
 
@@ -335,10 +342,40 @@ impl Chip8 {
 	pub fn run(&mut self) {
 		loop {
 			self.cpu.emulate_cycle();
+			self.cpu.deal_with_input();
 		}
 	}
 
 	fn _initialise_memory(&mut self) {
 		//TODO make this actually do something
+	}
+}
+
+#[derive(Clone, Copy)]
+pub enum Key {
+	K0,K1,K2,K3,K4,K5,K6,K7,K8,K9,
+	A,B,C,D,E,F
+}
+
+impl Key {
+	pub fn to_byte(&self) -> u8 {
+		match self {
+			&Key::K0 => 0x0,
+			&Key::K1 => 0x1,
+			&Key::K2 => 0x2,
+			&Key::K3 => 0x3,
+			&Key::K4 => 0x4,
+			&Key::K5 => 0x5,
+			&Key::K6 => 0x6,
+			&Key::K7 => 0x7,
+			&Key::K8 => 0x8,
+			&Key::K9 => 0x9,
+			&Key::A => 0xA,
+			&Key::B => 0xB,
+			&Key::C => 0xC,
+			&Key::D => 0xD,
+			&Key::E => 0xE,
+			&Key::F => 0xF
+		}
 	}
 }

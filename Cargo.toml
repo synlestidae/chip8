@@ -6,3 +6,4 @@ authors = ["Mate Antunovic <mate.a@blackpearlmail.com>"]
 [dependencies]
 rand = "0.3"
 glutin = "*"
+glium = "*"

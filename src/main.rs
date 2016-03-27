@@ -1,8 +1,10 @@
 extern crate rand;
 extern crate glutin;
+extern crate glium;
 
 mod vm;
 mod ui;
+mod gfx;
 
 use std::env;
 use std::fs::File;

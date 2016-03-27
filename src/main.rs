@@ -2,67 +2,45 @@ extern crate rand;
 extern crate glutin;
 
 mod vm;
+mod ui;
 
 use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::sync::mpsc;
 use std::thread;
-use glutin::Event;
 
-use vm::{Chip8, Key};
+use vm::{Chip8};
+use ui::{Chip8UI};
 
 pub fn main() {
 	let args_vec : Vec<_> = env::args().collect();
 	if args_vec.len() != 2 {
 		println!("Usage:\n{}: GAME_PATH", args_vec[0]);
 	}
-	println!("Loading game at {}", args_vec[1]);
-	let (key_tx, key_rx) = mpsc::channel();
+	println!("Loading game at {}...", args_vec[1]);
 	let game_path = &args_vec[1];
-
 	let mut f = File::open(game_path).unwrap();
 	let mut data = Vec::new();
-	let mut chip8 = Chip8::new(key_rx);
+
+	//set up the chip8 with channels
+	let (key_tx, key_rx) = mpsc::channel();
+	let (gfx_tx, gfx_rx) = mpsc::channel();
+	let mut chip8 = Chip8::new(key_rx, gfx_tx);
 
 	//load the actual cartridge
-	f.read_to_end(&mut data);
+	println!("Reading program data...");
+	if let Err(e) = f.read_to_end(&mut data) {
+		println!("Failed to read data: {}", e);
+	}
 	chip8.load(&data);
 	
-	println!("Game cartridge loaded. Setting up your session...");
-	thread::spawn(move || {
-		loop {
-			let window = glutin::Window::new().unwrap();
-			unsafe { window.make_current() };
-			for event in window.wait_events() {
-				if let Event::KeyboardInput(Released, num, _) = event {
-					println!("Key num {}", num);
-					match num {
-						11 => key_tx.send(Key::K0), 
-						2 => key_tx.send(Key::K1),
-						3 => key_tx.send(Key::K2),
-						4 => key_tx.send(Key::K3),
-						5 => key_tx.send(Key::K4),
-						6 => key_tx.send(Key::K5),
-						7 => key_tx.send(Key::K6),
-						8 => key_tx.send(Key::K7),
-						9 => key_tx.send(Key::K8),
-						10 => key_tx.send(Key::K9),
-						30 => key_tx.send(Key::A),
-						48 => key_tx.send(Key::B),
-						46 => key_tx.send(Key::C),
-						32 => key_tx.send(Key::D),
-						18 => key_tx.send(Key::E),
-						33 => key_tx.send(Key::F),
-						_ => (Ok(()))
-					};
-				}
-			}
-		}
-	});
-	println!("Running");
-	loop{};
-	//chip8.run();
+	println!("Program data loaded. Setting up your session...");
+	let session = Chip8UI::new(key_tx, gfx_rx);
+	session.start_session();
+
+	println!("Running emulator");
+	thread::spawn(move || chip8.run());
 }
 
 #[cfg(test)]

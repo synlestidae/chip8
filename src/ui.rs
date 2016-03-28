@@ -24,7 +24,7 @@ impl Chip8UI {
 
 	fn _update_graphics(&mut self, gfx: GFX) {
 		//TODO! Make this work
-		println!("GFX: {:?}", &gfx[0..2048]);
+		//println!("GFX: {:?}", &gfx[0..2048]);
 		self.gfx.update_graphics(gfx);
 	}
 

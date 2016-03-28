@@ -1,6 +1,7 @@
+#[macro_use]
+extern crate glium;
 extern crate rand;
 extern crate glutin;
-extern crate glium;
 
 mod vm;
 mod ui;
@@ -37,12 +38,15 @@ pub fn main() {
 	}
 	chip8.load(&data);
 	
-	println!("Program data loaded. Setting up your session...");
+	println!("Program data loaded.");
+
+	println!("Starting emulator");
+	thread::spawn(move || chip8.run());
+	println!("Emulator running.");
+
+	println!("Starting session...");
 	let session = Chip8UI::new(key_tx, gfx_rx);
 	session.start_session();
-
-	println!("Running emulator");
-	thread::spawn(move || chip8.run());
 }
 
 #[cfg(test)]

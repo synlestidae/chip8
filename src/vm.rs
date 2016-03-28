@@ -87,7 +87,6 @@ impl CPU {
 				// 3XNN	//Skips the next instruction if VX equals NN.
 				let register = (instruction & 0x0F00) >> 8;
 				let n = (0x00FF & instruction) as u8;
-				println!("Reg: {} {} {}", register, self.registers[register], n);
 				if self.registers[register] == n {
 					self.pc += 2;
 				}
@@ -96,7 +95,6 @@ impl CPU {
 				//  4XNN	Skips the next instruction if VX doesn't equal NN.
 				let register = (instruction & 0x0F00) >> 8;
 				let n = (0x00FF & instruction) as u8;
-				println!("Reg: {} {} {}", register, self.registers[register], n);
 				if self.registers[register] != 0x00FF & instruction as u8 {
 					self.pc += 2;
 				}
@@ -111,7 +109,8 @@ impl CPU {
 			}	
 			else if instruction & 0xF000 == 0x6000 {
 				//6XNN	Sets VX to NN.
-				register_x = instruction & 0x0F00 >> 8;
+				register_x = (instruction & 0x0F00) >> 8;
+				println!("{:X} is setting register {} to {}",instruction, register_x, (instruction & 0x00FF));
 				self.registers[register_x] = (instruction & 0x00FF) as u8;
 			}
 			else if instruction & 0xF000 == 0x7000 {
@@ -371,7 +370,8 @@ impl CPU {
 		let i1 = self.ram[self.pc as usize] as u16;
 		let i2 = self.ram[self.pc as usize + 1] as u16;
 		let opcode = (i1 << 8) | i2;
-		println!("OP: {}", format!("{:X} {:X}", self.pc, opcode));
+		println!("OP: {} {:?} {}", format!("{:X} {:X}", self.pc, opcode), 
+			&self.registers, self.index);
 		return opcode;
 	}
 

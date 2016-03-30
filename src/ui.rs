@@ -31,6 +31,7 @@ impl Chip8UI {
 	pub fn _handle_ui_events(&mut self) {
 		for event in self.gfx.get_display().poll_events() {
 			if let Event::KeyboardInput(state, num, _) = event {
+				println!("Event: {:?}", event);
 				let up = state == glutin::ElementState::Pressed;
 				let send_result = match num {
 					11 => self.key_sender.send((Key::K0, up)), 

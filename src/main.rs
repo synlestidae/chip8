@@ -18,8 +18,13 @@ use ui::{Chip8UI};
 
 pub fn main() {
 	let args_vec : Vec<_> = env::args().collect();
-	if args_vec.len() != 2 {
-		println!("Usage:\n{}: GAME_PATH", args_vec[0]);
+	if args_vec.len() == 0 {
+		println!("Please specify a path to a game file");
+		return;
+	}
+	else if args_vec.len() != 2 {
+		println!("Usage: {}: GAME_PATH", args_vec[0]);
+		return;
 	}
 	println!("Loading game at {}...", args_vec[1]);
 	let game_path = &args_vec[1];

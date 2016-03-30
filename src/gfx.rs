@@ -1,4 +1,3 @@
-#[macro_use]
 use glium;
 
 use vm::GFX;
@@ -47,30 +46,51 @@ impl Chip8GFX {
 	}
  
 	pub fn update_graphics(&mut self, gfx: GFX) {
+		println!("Updating graphics...");
 		let pixel_shapes = self._generate_pixels(gfx);
 		let mut target = self.display.draw();
 
-		let test_shape = &pixel_shapes[0];
-		let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
-		let vertex_buffer = glium::VertexBuffer::new(&self.display, &test_shape).unwrap();
-		target.draw(&vertex_buffer, &indices, &self.program, &glium::uniforms::EmptyUniforms,
-            &Default::default()).unwrap();
+		for shape in pixel_shapes {
+			let test_shape = shape;
+			let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+			let vertex_buffer = glium::VertexBuffer::new(&self.display, &test_shape).unwrap();
+			target.draw(&vertex_buffer, &indices, &self.program, &glium::uniforms::EmptyUniforms,
+	            &Default::default()).unwrap();
+		}
 
-		target.finish();
+		target.finish().unwrap();
 
 	}
 
 	fn _generate_pixels(&self, gfx: GFX) -> Vec<Shape> {
+		const PIXEL_DISPLAY_SIZE : f32 = 0.01;
+
 		let mut out = Vec::new();
+		let mut out_string = String::new();
 		for i in 0..gfx.len() {
-			let x = (i % 64) as f64;
-			let y = (i / 32) as f64;
-			out.push(vec![
-				Vertex { position: [0.0, 0.0]},
-				Vertex { position: [0.0, 1.0]},
-				Vertex { position: [1.0, 0.0]},
-			]);
+			if gfx[i] != 0 {
+				let x = (i % 64) as f32 * PIXEL_DISPLAY_SIZE;
+				let y = (i / 32) as f32 * PIXEL_DISPLAY_SIZE;
+				out.push(vec![
+					Vertex { position: [x, y]},
+					Vertex { position: [x + PIXEL_DISPLAY_SIZE, y]},
+					Vertex { position: [x, y + PIXEL_DISPLAY_SIZE]}
+				]);
+				out.push(vec![
+					Vertex { position: [x + PIXEL_DISPLAY_SIZE, y]},
+					Vertex { position: [x + PIXEL_DISPLAY_SIZE, y + PIXEL_DISPLAY_SIZE]},
+					Vertex { position: [x, y + PIXEL_DISPLAY_SIZE]}
+				]);
+				out_string.push_str("0");
+			}
+			else {
+				out_string.push_str(" ");
+			}
+			if i % 64 == 0 {
+				out_string.push_str("\n");
+			}
 		}
+		println!("--------------\n{}\n--------------", out_string);
 
 		out
 	}
@@ -92,6 +112,6 @@ const FRAGMENT_SHADER_SRC: &'static str = r#"
     out vec4 color;
 
     void main() {
-        color = vec4(1.0, 0.0, 0.0, 1.0);
+        color = vec4(1.0, 1.0, 1.0, 1.0);
     }
 "#;

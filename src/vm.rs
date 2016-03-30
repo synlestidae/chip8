@@ -1,6 +1,8 @@
 use rand::distributions::{IndependentSample, Range};
 use rand;
 use std::sync::mpsc::{Sender, Receiver};
+use std::thread::sleep;
+use std::time::Duration;
 
 //#[derive(Send)]
 pub struct CPU {
@@ -28,6 +30,7 @@ pub struct Chip8 {
 
 
 const SPRITE_OFFSET : usize = 0;
+const CLOCK_PERIOD_MILLIS : u64 = 1;
 
 impl CPU {
 	pub fn new(key_input: Receiver<(Key, bool)>, graphics_output: Sender<GFX>) -> CPU {
@@ -95,7 +98,7 @@ impl CPU {
 				//  4XNN	Skips the next instruction if VX doesn't equal NN.
 				let register = (instruction & 0x0F00) >> 8;
 				let n = (0x00FF & instruction) as u8;
-				if self.registers[register] != 0x00FF & instruction as u8 {
+				if self.registers[register] != n {
 					self.pc += 2;
 				}
 			}
@@ -140,7 +143,7 @@ impl CPU {
 			else if instruction & 0xF00F == 0x8003 {
 				//8XY3	Sets VX to VX xor VY.
 				register_x = (instruction & 0x0F00) >> 8;
-				register_y = (instruction & 0x0F00) >> 4;
+				register_y = (instruction & 0x00F0) >> 4;
 				self.registers[register_x] = self.registers[register_x] & self.registers[register_y];
 			}
 			else if instruction & 0xF00F == 0x8004 {
@@ -228,33 +231,30 @@ impl CPU {
 				//that need to be drawn. If N is greater than 1, second line 
 				//continues at position VX, VY+1, and so on.
 				let sprite_height = (instruction & 0x000F) as u16;
-				register_x = instruction & 0x0F00 >> 8;
-				register_y = instruction & 0x00F0 >> 8;
+				register_x = (instruction >> 8) & 0xF;
+				register_y = (instruction >> 4) & 0xF;
 				let px = self.registers[register_x];
 				let py = self.registers[register_y];
-				println!("Screen position {:?}", (px, py));
+				let mut reg_0xf = 0;
+				println!("{:X} Screen position {:?} from {:?}", instruction, (px, py), (register_x, register_y));
 				for i in 0..sprite_height {
 					let row = self.ram[(self.index + i) as usize];
-					let mut x : i8 = 7;
+					let mut x : i8 = 8;
+					println!("Row: {}", row);
 					while x > 0 {
 						let mut pixel = &mut self.gfx[(py as usize) * 32 + (px as usize)];
 						let ghost_pixel = *pixel;
-						*pixel = match (*pixel != 0) ^ ((row & (1 << x)) >> x == 1) {
-							true => 1,
-							false => 0
-						};
+						*pixel = *pixel ^ ((row >> (x - 1)) & 1);
 						//If this causes any pixels to be erased, VF is set to 1 
 						//otherwise it is set to 0
 						if *pixel == 0 && ghost_pixel == 1 {
-							self.registers[0xF] = 1;
-						}
-						else {
-							self.registers[0xF] = 0;
+							reg_0xf = 1;
 						}
 						x = x - 1;
 					}
 				}
 				update_gfx = true;
+				self.registers[0xF] = reg_0xf;
 			} 
 			else if instruction & 0xF0FF == 0xE09E {
 				//EX9E	Skips the next instruction if the key stored in VX is pressed.
@@ -280,7 +280,10 @@ impl CPU {
 			else if instruction & 0xF0FF == 0xF00A {
 				// FX0A	A key press is awaited, and then stored in VX.
 				let key = self.key_input.recv();
-				self._deal_with_keypress(&key);
+				match key {
+					Ok(k) => self.registers[0] = k.0.to_byte(),
+					_ => println!("Error while receiving input message")
+				}
 			} 
 			else if instruction & 0xF0FF == 0xF015 {
 				//  FX15	Sets the delay timer to VX.
@@ -346,23 +349,27 @@ impl CPU {
 					println!("Failed to send graphics update: {:?}", e);
 				}
 			}
+
+			sleep(Duration::from_millis(CLOCK_PERIOD_MILLIS));
 		}		
 
 	pub fn deal_with_input(&mut self) {
 		//TODO: Make this do stuff
-		let mut tries = 5;
-		while tries > 0 {
-			let key = self.key_input.try_recv();
-			self._deal_with_keypress(&key);
-			tries = tries - 1;
-		}
+		let key = self.key_input.try_recv();
+		self._deal_with_keypress(key);
 	}
 
-	fn _deal_with_keypress<E>(&mut self, input: &Result<(Key, bool), E>) {
-		match input {				
-			&Ok((k, true)) => self.keypad[k.to_byte() as usize] = 1,
-			&Ok((k, false)) => self.keypad[k.to_byte() as usize] = 0,
-			_ => {}
+	fn _deal_with_keypress<E>(&mut self, input: Result<(Key, bool), E>) {
+		if input.is_ok() {
+			let unwrapped_input = input.ok().unwrap();
+			println!("Input detected: {:?} {}", unwrapped_input, unwrapped_input.0.to_byte());
+			match unwrapped_input {		
+				(k, true) => self.keypad[k.to_byte() as usize] = 1,
+				(k, false) => self.keypad[k.to_byte() as usize] = 0
+			}
+		}
+		else {
+			println!("No input");
 		}
 	}
 
@@ -504,7 +511,7 @@ impl Chip8 {
 	}
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Key {
 	K0,K1,K2,K3,K4,K5,K6,K7,K8,K9,
 	A,B,C,D,E,F

@@ -55,6 +55,20 @@ fn test_stores_instruction_0xfx55() {
 }
 
 #[test]
+fn test_adds_vx_to_index_0xfx1e() {
+	let mut chip8 = make_chip8().0;
+	chip8.load(&[
+		0xF0, 0x1E
+		]
+	);
+	let mut cpu = chip8.cpu;
+	cpu.registers[0] = 12;
+	cpu.index = 600;
+	cpu.emulate_cycle();
+	assert_eq!(600 + 12, cpu.index);
+}
+
+#[test]
 fn test_loads_hex_char_sprite_0xf029() {
 	let mut chip8 = make_chip8().0;
 	chip8.load(&[
@@ -65,7 +79,6 @@ fn test_loads_hex_char_sprite_0xf029() {
 	let mut cpu = chip8.cpu;
 	cpu.emulate_cycle();
 	cpu.emulate_cycle();
-	//let sprite = cpu.read_memory(cpu.index, cpu.index + 5).collect::<Vec<_>>();
 	assert_eq!(vec![
 			//0
 			0xF0,

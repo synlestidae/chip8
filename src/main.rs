@@ -6,6 +6,7 @@ extern crate glutin;
 mod vm;
 mod ui;
 mod gfx;
+mod tests;
 
 use std::env;
 use std::fs::File;
@@ -52,11 +53,4 @@ pub fn main() {
 	println!("Starting session...");
 	let session = Chip8UI::new(key_tx, gfx_rx);
 	session.start_session();
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-    }
 }

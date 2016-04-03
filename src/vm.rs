@@ -9,9 +9,9 @@ pub struct CPU {
 	pub delay_timer: u8,
 	pub sound_timer: u8,
 	pub gfx: GFX,
-	registers: [u8; 16],
-	pc: u16,
-	index: u16,
+	pub registers: [u8; 16],
+	pub pc: u16,
+	pub index: u16,
 	keypad: [u8; 16],
 	//draw_flag: bool,
 	stack: Vec<u16>, 
@@ -25,12 +25,12 @@ type RAM = [u8; 4096];
 pub type GFX = [u8; 64 * 32];
 
 pub struct Chip8 {
-	cpu: CPU
+	pub cpu: CPU
 }
 
 
 const SPRITE_OFFSET : usize = 0;
-const CLOCK_PERIOD_MILLIS : u64 = 1;
+const CLOCK_PERIOD_MILLIS : u64 = 10;
 
 impl CPU {
 	pub fn new(key_input: Receiver<(Key, bool)>, graphics_output: Sender<GFX>) -> CPU {
@@ -57,12 +57,16 @@ impl CPU {
 		}
 	}
 
+	pub fn read_memory<'a>(&'a self, start: usize, end: usize) -> &'a [u8] {
+		&self.ram[start..end]
+	}
+
 	pub fn emulate_cycle(&mut self) {
 			let register_x: usize;
 			let register_y: usize;
 			let mut update_gfx = false;
 
-			let instruction = self._fetch() as usize;
+			let instruction = self.fetch() as usize;
 			if 0xF000 & instruction == 0x1000 {
 				self.pc = instruction as u16 & 0x0FFF;
 				return;
@@ -70,18 +74,24 @@ impl CPU {
 			else if instruction == 0x00E0 { //Clears the screen.
 				self.gfx = [0; 2048];
 				update_gfx = true;
+				self.log_str("Screen now clear. GFX array zeroed-out");
 			}
 			else if instruction == 0x00EE { //Returns from a subroutine.
-				self.pc = self.stack.pop().unwrap();
+				let new_pc = self.stack.pop().unwrap();
+				self.log_string(format!("Returning from subroutine. pc {:X} -> {:X}", 
+					self.pc, new_pc));
+				self.pc = new_pc;
 				return;
 			}
 			else if instruction & 0xF000 == 0x1000 {
 				let address = instruction & 0x0FFF;
 				self.pc = address as u16;
+				self.log_string(format!("Jumping to address {:X}", self.pc));
 				return;
 			}
 			else if instruction & 0xF000 == 0x2000 { //Calls subroutine at NNN.
 				let sub = instruction - 0x2000;
+				self.log_string(format!("Saving pc {:X} and jumping to {:X}", self.pc, sub));
 				self.stack.push(self.pc);
 				self.pc = sub as u16;
 				return;
@@ -90,6 +100,9 @@ impl CPU {
 				// 3XNN	//Skips the next instruction if VX equals NN.
 				let register = (instruction & 0x0F00) >> 8;
 				let n = (0x00FF & instruction) as u8;
+				self.log_string(format!("Checking whether register at {} is equal to {}", 
+					register, n));
+
 				if self.registers[register] == n {
 					self.pc += 2;
 				}
@@ -98,6 +111,8 @@ impl CPU {
 				//  4XNN	Skips the next instruction if VX doesn't equal NN.
 				let register = (instruction & 0x0F00) >> 8;
 				let n = (0x00FF & instruction) as u8;
+				self.log_string(format!("Checking whether register at {:X} is NOT equal to {:X}", 
+					register, n));
 				if self.registers[register] != n {
 					self.pc += 2;
 				}
@@ -106,6 +121,8 @@ impl CPU {
 				// 5XY0 //Skips the next instruction if VX equals VY.
 				register_x = (0x0F00 & instruction) >> 8;
 				register_y = (0x00F0 & instruction) >> 4;
+				self.log_string(format!("Checking whether register at {:X} is equal to register at {:X}", 
+					register_x, register_y));
 				if self.registers[register_x] == self.registers[register_y] {
 					self.pc += 2;
 				}
@@ -113,38 +130,45 @@ impl CPU {
 			else if instruction & 0xF000 == 0x6000 {
 				//6XNN	Sets VX to NN.
 				register_x = (instruction & 0x0F00) >> 8;
-				println!("{:X} is setting register {} to {}",instruction, register_x, (instruction & 0x00FF));
+				println!("{:X} is setting register {:X} to {:X}",instruction, register_x, (instruction & 0x00FF));
+				self.log_string(format!("Setting register at {} to {}", 
+					register_x, (instruction & 0x00FF)));
 				self.registers[register_x] = (instruction & 0x00FF) as u8;
 			}
 			else if instruction & 0xF000 == 0x7000 {
 				//7XNN	Adds NN to VX.
 				register_x = (instruction & 0x0F00) >> 8;
 				let n = (instruction & 0x00FF) as u8;
+				self.log_string(format!("Adding {} to {:X}", register_x, n));
 				self.registers[register_x] = self.registers[register_x].overflowing_add(n).0; 
 			}
 			else if instruction & 0xF00F == 0x8000 { 
 				//8XY0	Sets VX to the value of VY. 
 				register_x = (instruction & 0x0F00) >> 8;
 				register_y = (instruction & 0x00F0) >> 4;
+				self.log_string(format!("Setting {:X} to {:X}", register_x, register_y));
 				self.registers[register_x] = self.registers[register_y];
 			}
 			else if instruction & 0xF00F == 0x8001 { 
 				//8XY1	Sets VX to VX or VY.
 				register_x = (instruction & 0x0F00) >> 8;
 				register_y = (instruction & 0x0F00) >> 4;
+				self.log_string(format!("Bitwise ORing {:X} with {:X}", register_x, register_y));
 				self.registers[register_x] = self.registers[register_x] | self.registers[register_y];
 			}
 			else if instruction & 0xF00F == 0x8002 {
 				//8XY2	Sets VX to VX and VY.
 				register_x = (instruction & 0x0F00) >> 8;
-				register_y = (instruction & 0x0F00) >> 4;
+				register_y = (instruction & 0x00F0) >> 4;
+				self.log_string(format!("Bitwise ANDing {:X} with {:X}", register_x, register_y));
 				self.registers[register_x] = self.registers[register_x] & self.registers[register_y];
 			}
 			else if instruction & 0xF00F == 0x8003 {
 				//8XY3	Sets VX to VX xor VY.
 				register_x = (instruction & 0x0F00) >> 8;
 				register_y = (instruction & 0x00F0) >> 4;
-				self.registers[register_x] = self.registers[register_x] & self.registers[register_y];
+				self.log_string(format!("Bitwise XORing {:X} with {:X}", register_x, register_y));
+				self.registers[register_x] = self.registers[register_x] ^ self.registers[register_y];
 			}
 			else if instruction & 0xF00F == 0x8004 {
 				//8XY4	Adds VY to VX. VF is set to 1 when there's a carry, and to 0 when there isn't.
@@ -156,6 +180,7 @@ impl CPU {
 					 true => 1,
 					 false => 0
 				};
+				self.log_string(format!("Adding {:X} to {:X}", register_y, register_x));
 			}
 			else if instruction & 0xF00F == 0x8005 {
 				/*8XY5 VY is subtracted from VX. VF is set to 0 when there's a borrow, and 1 when there isn't.*/
@@ -170,6 +195,7 @@ impl CPU {
 				else {
 					self.registers[0xF] = 1;
 				}
+				self.log_string(format!("Subtracting {:X} from {:X}", register_y, register_x));
 			}
 			else if instruction & 0xF00F == 0x8006 {
 				/* 8XY6 Shifts VX right by one. VF is set to the value of the least significant bit of VX before the shift.[2]*/
@@ -240,7 +266,7 @@ impl CPU {
 				for i in 0..sprite_height {
 					let row = self.ram[(self.index + i) as usize];
 					let mut x : i8 = 8;
-					println!("Row: {}", row);
+					println!("Row at {:X}: {}", self.index + i, row);
 					while x > 0 {
 						let mut pixel = &mut self.gfx[(py as usize) * 32 + (px as usize)];
 						let ghost_pixel = *pixel;
@@ -280,8 +306,13 @@ impl CPU {
 			else if instruction & 0xF0FF == 0xF00A {
 				// FX0A	A key press is awaited, and then stored in VX.
 				let key = self.key_input.recv();
+				register_x = (instruction & 0x0F00) >> 8;
+				self.log_string(format!("Waiting for a key press to store in {}", register_x));
 				match key {
-					Ok(k) => self.registers[0] = k.0.to_byte(),
+					Ok(k) => {
+						println!("Key pressed is {:?}", key);
+						self.registers[register_x] = k.0.to_byte();
+					},
 					_ => println!("Error while receiving input message")
 				}
 			} 
@@ -306,6 +337,7 @@ impl CPU {
 				register_x = (0x0F00 & instruction) >> 8; 
 				let sprite_index = self.registers[register_x];
 				self.index = SPRITE_OFFSET as u16 + (sprite_index as u16 * 5);
+				println!("Sprite requested: {} {} {}", register_x, sprite_index, self.index);
 			} 
 			else if instruction & 0xF0FF == 0xF033 {
 				// FX33	Stores the Binary-coded decimal representation of VX, 
@@ -319,24 +351,25 @@ impl CPU {
 				let ones: u8 = val % 10;
 				let tens : u8 = (val % 100) / 10;
 				let hundreds: u8 = val / 100;
+				println!("Writing {} {} {} to {}", hundreds, tens, ones, i);
 				self.write_memory(&[hundreds, tens, ones], i);
 			} 
 			else if instruction & 0xF0FF == 0xF055 {
 				// FX55	Stores V0 to VX (including VX) in memory starting at address I.[4]
 				register_x = (instruction & 0x0F00) >> 8;
-				for j in 0..register_x {
+				for j in 0..(register_x + 1) {
 					self.ram[self.index as usize + j] = self.registers[j];
 				}
 			}
 			else if instruction & 0xF0FF == 0xF065 {
 				// FX65	Fills V0 to VX (including VX) with values from memory starting at address I.[4]
-				let k = instruction & (0x0F00 >> 8) as usize;
-				for j in 0..k {
+				let k = (instruction & 0x0F00) >> 8 as usize;
+				for j in 0..(k + 1) {
 					self.registers[j] = self.ram[self.index as usize + j as usize]
 				}
 			} 
 			else {
-				panic!("Unknown instruction: {}", instruction);
+				panic!("Unknown instruction at {}: {:X}", self.pc, instruction);
 			}
 			self.pc += 2;
 
@@ -373,7 +406,7 @@ impl CPU {
 		}
 	}
 
-	fn _fetch(&mut self) -> u16 {
+	fn fetch(&mut self) -> u16 {
 		let i1 = self.ram[self.pc as usize] as u16;
 		let i2 = self.ram[self.pc as usize + 1] as u16;
 		let opcode = (i1 << 8) | i2;
@@ -484,9 +517,19 @@ impl CPU {
 			0x80
 		];
 		
-		for j in 0..SPRITE_OFFSET {
+		for j in 0..built_in_sprites.len() {
 			self.ram[SPRITE_OFFSET + j] = built_in_sprites[j];
 		}
+
+		println!("Ram: {:?}", &self.ram[0..512]);
+	}
+
+	fn log_string(&self, line: String) {
+		println!("{}", line);
+	}
+
+	fn log_str(&self, line: &str) {
+		println!("{}", line);
 	}
 }
 

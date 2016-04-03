@@ -53,3 +53,25 @@ fn test_stores_instruction_0xfx55() {
 	cpu.emulate_cycle();
 	assert_eq!(r.iter().collect::<Vec<_>>(), cpu.read_memory(0x820, 0x820 + 16).iter().collect::<Vec<_>>());
 }
+
+#[test]
+fn test_loads_hex_char_sprite_0xf029() {
+	let mut chip8 = make_chip8().0;
+	chip8.load(&[
+		0xF0, 0x29, //sets I to the sprite for "0"
+		0xF5, 0x65 //loads the sprite into I..I+4 inclusive
+		]
+	);
+	let mut cpu = chip8.cpu;
+	cpu.emulate_cycle();
+	cpu.emulate_cycle();
+	//let sprite = cpu.read_memory(cpu.index, cpu.index + 5).collect::<Vec<_>>();
+	assert_eq!(vec![
+			//0
+			0xF0,
+			0x90,
+			0x90,
+			0x90,
+			0xF0
+	], cpu.registers[0..5].iter().map(|&x| x).collect::<Vec<u8>>());
+}

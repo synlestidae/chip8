@@ -268,17 +268,18 @@ impl CPU {
 				println!("{:X} Screen position {:?} from {:?}", instruction, (px, py), (register_x, register_y));
 				for i in 0..sprite_height {
 					let row = self.ram[(self.index + i) as usize];
-					let mut x : i8 = 8;
+					let mut x : i8 = 7;
 					println!("Row at {:X}: {}", self.index + i, row);
-					while x > 0 {
-						let mut pixel = &mut self.gfx[(py as usize) * 32 + (px as usize)];
-						let ghost_pixel = *pixel;
-						*pixel = *pixel ^ ((row >> (x - 1)) & 1);
+					while x >= 0 {
+						let pixel_index: usize = (py as usize) * 64 + (px as usize); //(self.index + (i as u16)) as usize + (x as usize);
+						let original_pixel = self.gfx[pixel_index];
+						let new_pixel = (row >> x) & 1;
 						//If this causes any pixels to be erased, VF is set to 1 
 						//otherwise it is set to 0
-						if *pixel == 0 && ghost_pixel == 1 {
+						if new_pixel == 0 && original_pixel == 1 {
 							reg_0xf = 1;
 						}
+						self.ram[pixel_index] = new_pixel;
 						x = x - 1;
 					}
 				}

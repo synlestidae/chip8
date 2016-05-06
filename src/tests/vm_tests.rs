@@ -107,12 +107,12 @@ fn test_renders_inbuilt_sprite_0() {
 	let mut chip8 = make_chip8().0;
 	chip8.load(&[
 		0xf0, 0x29,
-		0xD0, 0x05
+		0xd0, 0x05
 		]
 	);
 	let mut cpu = &mut chip8.cpu;
 	cpu.emulate_cycle();
 	cpu.emulate_cycle();
-	assert_eq!(&[0,0,0,0, 0,0,0,0, 1,1,1,1, 0,0,0,0], &cpu.gfx[0..16]);
+	assert_eq!(&[1,1,1,1, 0,0,0,0], &cpu.gfx[0..8]);
 
 }

@@ -90,7 +90,7 @@ impl CPU {
 				return;
 			}
 			else if instruction & 0xF000 == 0x2000 { //Calls subroutine at NNN.
-				let sub = instruction - 0x2000;
+				let sub = instruction & 0x0FFF;
 				self.log_string(format!("Saving pc {:X} and jumping to {:X}", self.pc, sub));
 				self.stack.push(self.pc);
 				self.pc = sub as u16;
@@ -152,7 +152,7 @@ impl CPU {
 			else if instruction & 0xF00F == 0x8001 { 
 				//8XY1	Sets VX to VX or VY.
 				register_x = (instruction & 0x0F00) >> 8;
-				register_y = (instruction & 0x0F00) >> 4;
+				register_y = (instruction & 0x00F0) >> 4;
 				self.log_string(format!("Bitwise ORing {:X} with {:X}", register_x, register_y));
 				self.registers[register_x] = self.registers[register_x] | self.registers[register_y];
 			}
@@ -173,7 +173,7 @@ impl CPU {
 			else if instruction & 0xF00F == 0x8004 {
 				//8XY4	Adds VY to VX. VF is set to 1 when there's a carry, and to 0 when there isn't.
 				register_x = (instruction & 0x0F00) >> 8;
-				register_y = (instruction & 0x0F00) >> 4;
+				register_y = (instruction & 0x00F0) >> 4;
 				let result = self.registers[register_x].overflowing_add(self.registers[register_y]);
 				self.registers[register_x] =  result.0;
 				self.ram[0xF] = match result.1 {
@@ -184,28 +184,30 @@ impl CPU {
 			}
 			else if instruction & 0xF00F == 0x8005 {
 				/*8XY5 VY is subtracted from VX. VF is set to 0 when there's a borrow, and 1 when there isn't.*/
-				let register_x = instruction & 0x0F00 >> 8;
-				let register_y = instruction & 0x00F0 >> 4;
+				let register_x = (instruction & 0x0F00) >> 8;
+				let register_y = (instruction & 0x00F0) >> 4;
 				let val = self.registers[register_x];
 				let result = val - self.registers[register_y];
 				self.registers[register_x] = result;
+				self.log_string(format!("Subtracting {:X} from {:X}: {}-{}", register_y, register_x, self.registers[register_x], self.registers[register_y]));
 				if result < val {
 					self.registers[0xF] = 0;
 				}
 				else {
 					self.registers[0xF] = 1;
 				}
-				self.log_string(format!("Subtracting {:X} from {:X}", register_y, register_x));
+				self.log_string(format!("Result is {:?}", result));
 			}
 			else if instruction & 0xF00F == 0x8006 {
 				/* 8XY6 Shifts VX right by one. VF is set to the value of the least significant bit of VX before the shift.[2]*/
 				register_x = (instruction & 0x0F00) >> 8;
+				self.registers[0xF] = self.registers[register_x] & 1;
 				self.registers[register_x] = self.registers[register_x] >> 1;
 			}
 			else if instruction & 0xF00F == 0x8007 {
 				/*8XY7	Sets VX to VY minus VX. VF is set to 0 when there's a borrow, and 1 when there isn't.*/
-				let register_x = instruction & 0x0F00 >> 8;
-				let register_y = instruction & 0x00F0 >> 4;
+				let register_x = (instruction & 0x0F00) >> 8;
+				let register_y = (instruction & 0x00F0) >> 4;
 				let val = self.registers[register_x];
 				let result = self.registers[register_y] - val;
 				self.registers[register_x] = result;
@@ -219,32 +221,33 @@ impl CPU {
 			else if instruction & 0xF00F == 0x800E {
 				/*8XYE	Shifts VX left by one. VF is set to the 
 				value of the most significant bit of VX before the shift.[2]*/
-				register_x = instruction & 0x0F00 >> 8;
+				register_x = (instruction & 0x0F00) >> 8;
 				let val = self.registers[register_x];
-				self.registers[0xF] = val & 129 >> 7;
-				self.registers[register_x] = val << 1;
+				self.registers[0xF] = (val & 129) >> 7;
+				self.registers[register_x] = self.registers[register_x] * 2;
 			}
 			else if instruction & 0xF00F == 0x9000 {
 				/*0x9XY0	Skips the next instruction if VX doesn't equal VY.*/
 				register_x = (instruction & 0x0F00) >> 8;
-				register_y = (instruction & 0x0F0) >> 4;
+				register_y = (instruction & 0x00F0) >> 4;
 				if self.registers[register_x] != self.registers[register_y] {
 					self.pc += 2;
 				}
 			}
-			else if instruction & 0xF000 == 0xA000 {/*ANNN	Sets I to the address NNN.*/
+			else if instruction & 0xF000 == 0xA000 {
+				/*ANNN	Sets I to the address NNN.*/
 				self.index = (instruction & 0x0FFF) as u16;
 			}
 			else if instruction & 0xF000 == 0xB000 {
 				//BNNN	Jumps to the address NNN plus V0.
-				self.pc = 0x0FFF & (instruction as u16) + (self.registers[0] as u16);
+				self.pc = 0x0FFF & (instruction as u16 + self.registers[0] as u16);
 				return;
 			} 
 			else if instruction & 0xF000 == 0xC000 {
 				//CXNN	Sets VX to the result of a bitwise and operation on a random number and NN.
 				let between = Range::new(0, 0xFF);
 				let mut rng = rand::thread_rng();
-				let n = (instruction & 0x0F00) >> 4 as u8;
+				let n = (instruction & 0x00FF) as u8;
 				register_x = (instruction & 0x0F00) >> 8;
 				self.registers[register_x] = (n & between.ind_sample(&mut rng)) as u8;
 			} 
@@ -305,9 +308,9 @@ impl CPU {
 			}	
 			else if instruction & 0xF0FF == 0xF00A {
 				// FX0A	A key press is awaited, and then stored in VX.
-				let key = self.key_input.recv();
 				register_x = (instruction & 0x0F00) >> 8;
 				self.log_string(format!("Waiting for a key press to store in {}", register_x));
+				let key = self.key_input.recv();
 				match key {
 					Ok(k) => {
 						println!("Key pressed is {:?}", key);
@@ -318,12 +321,13 @@ impl CPU {
 			} 
 			else if instruction & 0xF0FF == 0xF015 {
 				//  FX15	Sets the delay timer to VX.
-				register_x = instruction & 0x0F00 >> 8;
+				register_x = (instruction & 0x0F00) >> 8;
 				self.delay_timer = self.registers[register_x] as u8;
 			} 
 			else if instruction & 0xF0FF == 0xF018 {
 				// FX18	Sets the sound timer to VX.
-				register_x = instruction & 0x0F00 >> 8;
+				register_x = (instruction & 0x0F00) >> 8;
+				self.log_string(format!("Setting sound timer to value of register {}: {:X}", register_x, self.registers[register_x]));
 				self.sound_timer = self.registers[register_x] as u8;
 			} 
 			else if instruction & 0xF0FF == 0xF01E {

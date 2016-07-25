@@ -3,6 +3,7 @@ use rand;
 use std::sync::mpsc::{Sender, Receiver};
 use std::thread::sleep;
 use std::time::Duration;
+use std::process;
 
 //#[derive(Send)]
 pub struct CPU {
@@ -37,7 +38,7 @@ impl CPU {
 		CPU {
 			delay_timer: 0,
 			sound_timer: 0,
-			gfx: [0; 2048],
+			gfx: [[0; 64]; 32],
 			registers: [0; 16],
 			pc: 0,
 			index: 0,
@@ -72,7 +73,7 @@ impl CPU {
 				return;
 			}
 			else if instruction == 0x00E0 { //Clears the screen.
-				self.gfx = [0; 2048];
+				self.gfx = [[0; 64]; 32];
 				update_gfx = true;
 				self.log_str("Screen now clear. GFX array zeroed-out");
 			}
@@ -267,15 +268,16 @@ impl CPU {
                     instruction & 0xF
                 };
 				let mut reg_0xf = 0;
-                let px = register_x;
-                let py = register_y;
+                let px = self.registers[register_x];
+                let py = self.registers[register_y];
                 for y in 0..max_height {
                     let row = self.ram[self.index as usize + y];
                     for x in 0..4 {
-                        let gfx_index = (px + x) % 64 + (py + y) * 64;
-                        let pixel = (row >> (7 - x)) as u8 & 1;
-                        let original_pixel = self.gfx[gfx_index];
-                        self.gfx[gfx_index] = pixel ^ original_pixel;
+                        let pixel = (row >> (x + 4)) as u8 & 1;
+                        let xi = (px as usize + x) % 64;
+                        let yi = (py as usize + y) % 32;
+                        let original_pixel = self.gfx[yi][xi];
+                        self.gfx[yi][xi] = pixel ^ original_pixel;
                         if original_pixel == 1 && pixel == 0 {
                             reg_0xf = 1;
                         }
@@ -377,12 +379,13 @@ impl CPU {
 			self.pc += 2;
 
 			if update_gfx {
-				let mut gfx_out = [0; 32 * 64];
+				let mut gfx_out = self.gfx.clone();/*[0; 32 * 64];
 				for i in 0..self.gfx.len() {
 					gfx_out[i] = self.gfx[i];
-				}
+				}*/
 				if let Err(e) = self.graphics_output.send(gfx_out) {
 					println!("Failed to send graphics update: {:?}", e);
+                    process::exit(1);
 				}
 			}
 

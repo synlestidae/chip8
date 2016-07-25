@@ -70,7 +70,7 @@ impl Chip8GFX {
             for yi in 0..31 {
                 let x = xi as f32 * PIXEL_DISPLAY_SIZE;
                 let y = yi as f32 * PIXEL_DISPLAY_SIZE;
-                let pixel = gfx[yi * 64 + xi];
+                let pixel = gfx[yi][xi];
                 if pixel != 0 {
                     out.push(vec![
 					    Vertex { position: [x, y]},

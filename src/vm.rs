@@ -259,32 +259,28 @@ impl CPU {
 				//drawn starting at position VX, VY. N is the number of 8bit rows 
 				//that need to be drawn. If N is greater than 1, second line 
 				//continues at position VX, VY+1, and so on.
-				let sprite_height = (instruction & 0x000F) as u16;
 				register_x = (instruction >> 8) & 0xF;
 				register_y = (instruction >> 4) & 0xF;
-				let px = self.registers[register_x];
-				let py = self.registers[register_y];
+                let max_height = if instruction & 0xF > 5 {
+                    5
+                } else {
+                    instruction & 0xF
+                };
 				let mut reg_0xf = 0;
-				println!("{:X} Screen position {:?} from {:?}", instruction, (px, py), (register_x, register_y));
-				for i in 0..sprite_height {
-					print!("Sprite {:X}", self.ram[(self.index + i) as usize] as u16);
-					let mut x : i8 = 0;
-					let row : u8 = self.ram[(self.index + i + (x as u16)) as usize];
-					println!("Drawing {:X}", row);
-					while x <= 7 {
-						let pixel_index: usize = (py as usize + i as usize) * 64 + (px as usize + x as usize); 
-						let original_pixel = self.gfx[pixel_index];
-						let new_pixel = (row >> (7 - x)) as u8 & 1;
-						//If this causes any pixels to be erased, VF is set to 1 
-						//otherwise it is set to 0
-						println!("Setting pixel col {:X} for {:X} at {:X}", x, new_pixel, pixel_index);
-						if new_pixel == 0 && original_pixel == 1 {
-							reg_0xf = 1;
-						}
-						self.gfx[pixel_index] = new_pixel;
-						x = x + 1;
-					}
-				}
+                let px = register_x;
+                let py = register_y;
+                for y in 0..max_height {
+                    let row = self.ram[self.index as usize + y];
+                    for x in 0..4 {
+                        let gfx_index = (px + x) % 64 + (py + y) * 64;
+                        let pixel = (row >> (7 - x)) as u8 & 1;
+                        let original_pixel = self.gfx[gfx_index];
+                        self.gfx[gfx_index] = pixel ^ original_pixel;
+                        if original_pixel == 1 && pixel == 0 {
+                            reg_0xf = 1;
+                        }
+                    }
+                }
 				update_gfx = true;
 				self.registers[0xF] = reg_0xf;
 			} 

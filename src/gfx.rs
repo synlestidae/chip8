@@ -64,34 +64,32 @@ impl Chip8GFX {
 
 	fn _generate_pixels(&self, gfx: GFX) -> Vec<Shape> {
 		const PIXEL_DISPLAY_SIZE : f32 = 0.01;
-
 		let mut out = Vec::new();
 		let mut out_string = String::new();
-		for i in 0..gfx.len() {
-			if gfx[i] != 0 {
-				let x = (i % 64) as f32 * PIXEL_DISPLAY_SIZE;
-				let y = (i / 32) as f32 * PIXEL_DISPLAY_SIZE;
-				out.push(vec![
-					Vertex { position: [x, y]},
-					Vertex { position: [x + PIXEL_DISPLAY_SIZE, y]},
-					Vertex { position: [x, y + PIXEL_DISPLAY_SIZE]}
-				]);
-				out.push(vec![
-					Vertex { position: [x + PIXEL_DISPLAY_SIZE, y]},
-					Vertex { position: [x + PIXEL_DISPLAY_SIZE, y + PIXEL_DISPLAY_SIZE]},
-					Vertex { position: [x, y + PIXEL_DISPLAY_SIZE]}
-				]);
-				out_string.push_str("0");
-			}
-			else {
-				out_string.push_str(" ");
-			}
-			if i % 64 == 0 {
-				out_string.push_str("\n");
-			}
-		}
+        for xi in 0..63 {
+            for yi in 0..31 {
+                let x = xi as f32 * PIXEL_DISPLAY_SIZE;
+                let y = yi as f32 * PIXEL_DISPLAY_SIZE;
+                let pixel = gfx[yi * 64 + xi];
+                if pixel != 0 {
+                    out.push(vec![
+					    Vertex { position: [x, y]},
+					    Vertex { position: [x + PIXEL_DISPLAY_SIZE, y]},
+					    Vertex { position: [x, y + PIXEL_DISPLAY_SIZE]}
+				    ]);
+				    out.push(vec![
+					    Vertex { position: [x + PIXEL_DISPLAY_SIZE, y]},
+					    Vertex { position: [x + PIXEL_DISPLAY_SIZE, y + PIXEL_DISPLAY_SIZE]},
+					    Vertex { position: [x, y + PIXEL_DISPLAY_SIZE]}
+				    ]);
+				    out_string.push_str("0");
+                } else {
+				    out_string.push_str(" ");
+                }
+            }
+            out_string.push_str("\n");
+        }
 		println!("--------------\n{}\n--------------", out_string);
-
 		out
 	}
 }

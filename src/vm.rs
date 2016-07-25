@@ -271,9 +271,9 @@ impl CPU {
                 let px = self.registers[register_x];
                 let py = self.registers[register_y];
                 for y in 0..max_height {
-                    let row = self.ram[self.index as usize + y];
+                    let row = self.ram[self.index as usize + y] >> 4;
                     for x in 0..4 {
-                        let pixel = (row >> (x + 4)) as u8 & 1;
+                        let pixel = row >> x as u8 & 1;
                         let xi = (px as usize + x) % 64;
                         let yi = (py as usize + y) % 32;
                         let original_pixel = self.gfx[yi][xi];

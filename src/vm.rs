@@ -22,7 +22,7 @@ pub struct CPU {
 
 type Keypad = [u8; 16];
 type RAM = [u8; 4096];
-pub type GFX = [u8; 64 * 32];
+pub type GFX = [[u8; 64]; 32];
 
 pub struct Chip8 {
 	pub cpu: CPU

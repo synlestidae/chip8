@@ -270,16 +270,22 @@ impl CPU {
 				let mut reg_0xf = 0;
                 let px = self.registers[register_x];
                 let py = self.registers[register_y];
-                for y in 0..max_height {
+                for y in 0..max_height + 1 {
                     let row = self.ram[self.index as usize + y] >> 4;
-                    for x in 0..4 {
+                    for x in 0..5 {
                         let pixel = row >> x as u8 & 1;
                         let xi = (px as usize + x) % 64;
                         let yi = (py as usize + y) % 32;
                         let original_pixel = self.gfx[yi][xi];
-                        self.gfx[yi][xi] = pixel ^ original_pixel;
-                        if original_pixel == 1 && pixel == 0 {
-                            reg_0xf = 1;
+                        if pixel != 0 {
+                            if original_pixel == 0 {
+                                self.gfx[yi][xi] = 1;
+                            } else {
+                                reg_0xf = 1;
+                                self.gfx[yi][xi] = 0;
+                            }
+                        } else {
+                            self.gfx[yi][xi] = 0;
                         }
                     }
                 }

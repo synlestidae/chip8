@@ -5,6 +5,7 @@ use gfx::Chip8GFX;
 
 use glutin;
 use glutin::{Event};
+use std::process;
 
 pub struct Chip8UI {
 	key_sender: Sender<(Key, bool)>,
@@ -55,7 +56,9 @@ impl Chip8UI {
 				if !send_result.is_ok() {
 					println!("Failed to send event: {:?}", event);
 				}
-			}
+			} else if let Event::Closed = event {
+                process::exit(0);
+            }
 		}
 	}
 

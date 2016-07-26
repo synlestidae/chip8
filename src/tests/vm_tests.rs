@@ -113,6 +113,5 @@ fn test_renders_inbuilt_sprite_0() {
 	let mut cpu = &mut chip8.cpu;
 	cpu.emulate_cycle();
 	cpu.emulate_cycle();
-	assert_eq!(&[1,1,1,1, 0,0,0,0], &cpu.gfx[0..8]);
-
+	assert_eq!(&[1,1,1,1, 0,0,0,0], &cpu.gfx[0][0..8]);
 }

@@ -225,7 +225,7 @@ impl CPU {
 				register_x = (instruction & 0x0F00) >> 8;
 				let val = self.registers[register_x];
 				self.registers[0xF] = (val & 129) >> 7;
-				self.registers[register_x] = self.registers[register_x] * 2;
+				self.registers[register_x] = self.registers[register_x] << 1;
 			}
 			else if instruction & 0xF00F == 0x9000 {
 				/*0x9XY0	Skips the next instruction if VX doesn't equal VY.*/
@@ -241,7 +241,7 @@ impl CPU {
 			}
 			else if instruction & 0xF000 == 0xB000 {
 				//BNNN	Jumps to the address NNN plus V0.
-				self.pc = 0x0FFF & (instruction as u16 + self.registers[0] as u16);
+				self.pc = (0x0FFF & instruction as u16) + self.registers[0] as u16;
 				return;
 			} 
 			else if instruction & 0xF000 == 0xC000 {
@@ -270,9 +270,9 @@ impl CPU {
 				let mut reg_0xf = 0;
                 let px = self.registers[register_x];
                 let py = self.registers[register_y];
-                for y in 0..max_height + 1 {
+                for y in 0..max_height {
                     let row = self.ram[self.index as usize + y] >> 4;
-                    for x in 0..5 {
+                    for x in 0..8 {
                         let pixel = row >> x as u8 & 1;
                         let xi = (px as usize + x) % 64;
                         let yi = (py as usize + y) % 32;
@@ -348,7 +348,7 @@ impl CPU {
 				register_x = (0x0F00 & instruction) >> 8; 
 				let sprite_index = self.registers[register_x];
 				self.index = SPRITE_OFFSET as u16 + (sprite_index as u16 * 5);
-				println!("Sprite requested: {} {} {}", register_x, sprite_index, self.index);
+				println!("Sprite requested: {} {}", sprite_index, self.index);
 			} 
 			else if instruction & 0xF0FF == 0xF033 {
 				// FX33	Stores the Binary-coded decimal representation of VX, 
